@@ -1,4 +1,4 @@
-import parseTag from './parse-tag'
+import parseTag from './parse-tag.js'
 
 const tagRE = /<[a-zA-Z0-9\-\!\/](?:"[^"]*"|'[^']*'|[^'">])*>/g
 const whitespaceRE = /^\s*$/

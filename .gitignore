@@ -1,2 +1,4 @@
 node_modules
 dist
+ast.js
+test-parse.json
