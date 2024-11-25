@@ -1,9 +1,13 @@
 import lookup from 'void-elements'
 const attrRE = /\s([^'"/\s><]+?)[\s/>]|([^\s=]+)=\s?(".*?"|'.*?')/g
 
-export default function stringify(tag) {
+const headings = new Set(['h1', 'h2', 'h3', 'h4', 'h5', 'h6'])
+
+export default function parseTag(tag) {
   const res = {
-    type: 'tag',
+    blockType: 'tag',
+    htmlType: '',
+    type: '',
     name: '',
     voidElement: false,
     attrs: {},
@@ -11,21 +15,23 @@ export default function stringify(tag) {
   }
 
   const tagMatch = tag.match(/<\/?([^\s]+?)[/\s>]/)
+  const tagName = tagMatch[1]
   if (tagMatch) {
-    res.name = tagMatch[1]
-    if (
-      lookup[tagMatch[1]] ||
-      tag.charAt(tag.length - 2) === '/'
-    ) {
+    res.htmlType = tagName
+
+    if (lookup[tagMatch[1]] || tag.charAt(tag.length - 2) === '/') {
       res.voidElement = true
     }
 
     // handle comment tag
-    if (res.name.startsWith('!--')) {
-      const endIndex = tag.indexOf('-->')
+    if (res.htmlType.startsWith('!--')) {
+      const endIndex = tagName.indexOf('-->')
+
       return {
-        type: 'comment',
-        comment: endIndex !== -1 ? tag.slice(4, endIndex) : '',
+        result: {
+          blockType: 'comment',
+          comment: endIndex !== -1 ? tagName.slice(4, endIndex) : '',
+        },
       }
     }
   }
@@ -58,5 +64,39 @@ export default function stringify(tag) {
     }
   }
 
-  return res
+  // Divs
+  if (tagName === 'div') {
+    if (res.attrs?.class?.includes('summary-table')) {
+      res.type = 'section'
+      // res.type = 'directive'
+      // res.name = 'list-table'
+      // const listChild = {
+      //   type: 'list',
+      //   htmlType: 'fake-list',
+      //   enumtype: 'unordered',
+      //   children: [],
+      //   voidElement: false,
+      //   attrs: {},
+      // }
+      // res.children = [listChild]
+      // return { result: res, newCurrentNode: listChild }
+      return { result: res }
+    } else if (res.attrs?.class?.includes('table-header')) {
+    } else if (res.attrs?.class?.includes('header')) {
+      res.type = 'section'
+    } else {
+      res.type = 'section'
+    }
+  } else if (tagName === 'span') {
+    res.type = 'paragraph'
+  } else if (tagName === 'a') {
+    res.type = 'reference'
+    res.refuri = res.attrs?.href
+  } else if (headings.has(tagName)) {
+    res.type = 'heading'
+  } else {
+    res.type = 'section'
+  }
+
+  return { result: res }
 }

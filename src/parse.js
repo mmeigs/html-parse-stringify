@@ -14,19 +14,24 @@ export default function parse(html, options) {
   let current
   let level = -1
   let inComponent = false
+  let tableRows = null
+  let inTable = false
 
   // handle text at top level
-  if (html.indexOf('<') !== 0) {
-    var end = html.indexOf('<')
-    result.push({
-      type: 'text',
-      content: end === -1 ? html : html.substring(0, end),
-    })
-  }
+  // if (html.indexOf('<') !== 0) {
+  //   var end = html.indexOf('<');
+  //   const content = end === -1 ? html : html.substring(0, end);
+  //   if (content !== '\n' && content !== '')
+
+  //   result.push({
+  //     type: 'text',
+  //     content: end === -1 ? html : html.substring(0, end),
+  //   })
+  // }
 
   html.replace(tagRE, function (tag, index) {
     if (inComponent) {
-      if (tag !== '</' + current.name + '>') {
+      if (tag !== '</' + current.htmlType + '>') {
         return
       } else {
         inComponent = false
@@ -39,6 +44,8 @@ export default function parse(html, options) {
     let parent
 
     if (isComment) {
+      // ???
+      return
       const comment = parseTag(tag)
 
       // if we're at root, push new base node
@@ -54,9 +61,10 @@ export default function parse(html, options) {
     if (isOpen) {
       level++
 
-      current = parseTag(tag)
-      if (current.type === 'tag' && options.components[current.name]) {
-        current.type = 'component'
+      const { result: parseResult, newCurrentNode } = parseTag(tag)
+      current = newCurrentNode ?? parseResult
+      if (current.blockType === 'tag' && options.components[current.htmlType]) {
+        current.blockType = 'component'
         inComponent = true
       }
 
@@ -66,30 +74,48 @@ export default function parse(html, options) {
         nextChar &&
         nextChar !== '<'
       ) {
-        current.children.push({
-          type: 'text',
-          content: html.slice(start, html.indexOf('<', start)),
-        })
+        const textContent = html.slice(start, html.indexOf('<', start))
+        if (textContent !== '\n' && textContent !== '') {
+          current.children.push({
+            blockType: 'text',
+            type: 'paragraph',
+            content: html.slice(start, html.indexOf('<', start)),
+            children: [
+              {
+                type: 'text',
+                value: textContent,
+              },
+            ],
+          })
+        }
       }
 
       // if we're at root, push new base node
       if (level === 0) {
-        result.push(current)
+        result.push(parseResult)
       }
 
       parent = arr[level - 1]
 
       if (parent) {
-        parent.children.push(current)
+        parent.children.push(parseResult)
       }
 
-      arr[level] = current
+      arr[level] = parseResult
+
+      if (newCurrentNode) {
+        level++
+        arr[level] = newCurrentNode
+      }
+
+      current = parseResult
     }
 
+    // TODO: look in here to see if I should use parseResult or current
     if (!isOpen || current.voidElement) {
       if (
         level > -1 &&
-        (current.voidElement || current.name === tag.slice(2, -1))
+        (current.voidElement || current.htmlType === tag.slice(2, -1))
       ) {
         level--
         // move current up a level to match the end tag
@@ -115,10 +141,12 @@ export default function parse(html, options) {
         //  * end > -1 indicates this is not a trailing text node
         //  * leading node is when level is -1 and parent has length 0
         if ((end > -1 && level + parent.length >= 0) || content !== ' ') {
-          parent.push({
-            type: 'text',
-            content: content,
-          })
+          if (content !== '' && content !== ' ' && content !== '\n') {
+            parent.push({
+              type: 'text',
+              content: content,
+            })
+          }
         }
       }
     }
